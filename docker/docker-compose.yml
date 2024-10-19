@@ -1,0 +1,25 @@
+services:
+  posgtres:
+    container_name: postgres
+    restart: no
+    image: postgres:15.4
+    ports:
+    - '${POSTGRES_PORT:-5432}:5432'
+    # set shared memory limit when using docker-compose
+    # shm_size: 128mb
+    volumes:
+      - type: volume
+        source: pg-data
+        target: /var/lib/postgresql/data
+      - './init.sql:/docker-entrypoint-initdb.d/init.sql'
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    environment:
+      POSTGRES_USER: load_test
+      POSTGRES_PASSWORD: pg_password
+
+volumes:
+  pg-data:
+    driver: local
