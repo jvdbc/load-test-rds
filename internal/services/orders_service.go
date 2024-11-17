@@ -3,37 +3,53 @@ package services
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jvdbc/load-test-rds/internal/repositories"
 )
 
-type OrdersService struct {
-	repo *repositories.OrdersRepository
+type OrderWorker struct {
+	id     uint
+	ticker *time.Ticker
+	repo   *repositories.OrdersRepository
 }
 
-func NewOrdersService(ordersRepo *repositories.OrdersRepository) *OrdersService {
-	return &OrdersService{repo: ordersRepo}
+func NewOrderWorker(agentId uint, every time.Duration, orderRepository *repositories.OrdersRepository) *OrderWorker {
+	return &OrderWorker{id: agentId, ticker: time.NewTicker(every), repo: orderRepository}
 }
 
-func (me OrdersService) InsertNewOrderAndPrintAll(agentId uint) error {
-	ordersCount, err := me.repo.Count(agentId)
-	if err != nil {
-		return err
-	}
+func (oa OrderWorker) Id() uint {
+	return oa.id
+}
 
-	_, err = me.repo.Insert(fmt.Sprintf("order %d from agent %d", ordersCount+1, agentId), agentId)
-	if err != nil {
-		return err
+func (oa OrderWorker) StartInsert(begin uint) error {
+	count := begin
+	for range oa.ticker.C {
+		count++
+		_, err := oa.repo.Insert(fmt.Sprintf("order %d from agent %d", count, oa.id), oa.id)
+		if err != nil {
+			return fmt.Errorf("error in StartInsert: %w for iteration: %d", err, count)
+		}
 	}
+	return nil
+}
 
-	orders, err := me.repo.List(agentId)
-	if err != nil {
-		return err
+func (oa OrderWorker) Stop() {
+	if oa.ticker != nil {
+		oa.ticker.Stop()
 	}
+}
 
-	for _, o := range orders {
-		fmt.Fprintf(os.Stdout, "%s\n", o.String())
+func (oa OrderWorker) StartPrintAll() error {
+	for range oa.ticker.C {
+		orders, err := oa.repo.List(oa.id)
+		if err != nil {
+			return err
+		}
+
+		for _, o := range orders {
+			fmt.Fprintf(os.Stdout, "%s\n", o.String())
+		}
 	}
-
 	return nil
 }

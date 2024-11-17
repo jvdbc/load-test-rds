@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jvdbc/load-test-rds/internal/adapters"
@@ -42,11 +43,11 @@ func main() {
 				Value: 5432,
 				Usage: "instance port",
 			},
-			// &cli.DurationFlag{
-			// 	Name:  "frequency",
-			// 	Value: time.Duration(1 * time.Second),
-			// 	Usage: "elasped time between message",
-			// },
+			&cli.DurationFlag{
+				Name:  "frequency",
+				Value: time.Duration(1 * time.Second),
+				Usage: "time elapsed between actions",
+			},
 		},
 		Name:  "load-test-rds",
 		Usage: "Connect to postgres",
@@ -56,6 +57,7 @@ func main() {
 			database := ctx.String("database")
 			username := ctx.String("username")
 			password := ctx.String("password")
+			frequency := ctx.Duration("frequency")
 
 			connStr := models.NewConnectionString(hostname, database, port, username, password)
 			db, err := open(connStr.String())
@@ -66,11 +68,24 @@ func main() {
 
 			agentId := uint(1)
 
-			orderAdapter := adapters.NewPostgresAdapter[models.Order](db)
-			orderRepo := repositories.NewOrdersRepository(orderAdapter)
-			orderService := services.NewOrdersService(orderRepo)
+			oAdapter := adapters.NewPostgresAdapter[models.Order](db)
+			oRepo := repositories.NewOrdersRepository(oAdapter)
+			oWorker := services.NewOrderWorker(agentId, frequency, oRepo)
+			defer oWorker.Stop()
 
-			return orderService.InsertNewOrderAndPrintAll(agentId)
+			begin, err := oRepo.Count(agentId)
+			if err != nil {
+				return err
+			}
+
+			go func() error {
+				if err = oWorker.StartInsert(begin); err != nil {
+					return err
+				}
+				return nil
+			}()
+
+			return oWorker.StartPrintAll()
 		},
 	}
 
