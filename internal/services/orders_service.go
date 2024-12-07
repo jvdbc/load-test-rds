@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jvdbc/load-test-rds/internal/repositories"
+	"github.com/jvdbc/load-test-rds/tools"
 )
 
 type OrderWorker struct {
@@ -46,6 +47,8 @@ func (oa OrderWorker) StartPrintAll() error {
 		if err != nil {
 			return err
 		}
+
+		tools.ExecClear(os.Stdout)
 
 		for _, o := range orders {
 			fmt.Fprintf(os.Stdout, "%s\n", o.String())

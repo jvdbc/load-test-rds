@@ -48,6 +48,14 @@ func main() {
 				Value: time.Duration(1 * time.Second),
 				Usage: "time elapsed between actions",
 			},
+			&cli.GenericFlag{
+				Name: "action",
+				Value: &models.EnumValue{
+					Enum:    []string{"read", "insert"},
+					Default: "read",
+				},
+				Usage: "launch action",
+			},
 		},
 		Name:  "load-test-rds",
 		Usage: "Connect to postgres",
@@ -58,6 +66,7 @@ func main() {
 			username := ctx.String("username")
 			password := ctx.String("password")
 			frequency := ctx.Duration("frequency")
+			action := ctx.Generic("action").(*models.EnumValue)
 
 			connStr := models.NewConnectionString(hostname, database, port, username, password)
 			db, err := open(connStr.String())
@@ -78,14 +87,14 @@ func main() {
 				return err
 			}
 
-			go func() error {
-				if err = oWorker.StartInsert(begin); err != nil {
-					return err
-				}
-				return nil
-			}()
+			switch action.String() {
+			case "read":
+				return oWorker.StartPrintAll()
+			case "insert":
+				return oWorker.StartInsert(begin)
+			}
 
-			return oWorker.StartPrintAll()
+			return nil
 		},
 	}
 
@@ -102,12 +111,3 @@ func open(connection string) (*pgx.Conn, error) {
 
 	return db, nil
 }
-
-// func open2(connection string) (*sql.DB, error) {
-// 	db, err := sql.Open("pgx", connection)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("unable to connect to database: %w", err)
-// 	}
-
-// 	return db, nil
-// }
